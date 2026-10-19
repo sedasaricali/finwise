@@ -3,12 +3,13 @@
 
 import { useEffect, useState } from "react";
 
-type Expense = {
+type Transaction = {
   id: string;
   description: string;
   amount: number;
   category: string;
   date: string;
+  type: "income" | "expense";
 };
 
 const categories = [
@@ -17,6 +18,15 @@ const categories = [
   "Giyim",
   "Faturalar",
   "Eğlence",
+  "Diğer",
+];
+
+const incomeCategories = [
+  "Maaş",
+  "Harçlık",
+  "Burs",
+  "Freelance",
+  "Yatırım",
   "Diğer",
 ];
 
@@ -63,33 +73,36 @@ function SummaryCard({
 }
 
 export default function Home() {
-  const income = 18000;
-  const initialExpense = 6000;
+ 
 
   const [expenseInput, setExpenseInput] = useState("");
   const [descriptionInput, setDescriptionInput] = useState("");
   const [categoryInput, setCategoryInput] = useState("Diğer");
+  const [transactionType, setTransactionType] =
+    useState<"income" | "expense">("expense");
   const [dateInput, setDateInput] = useState(getToday);
   const [selectedMonth, setSelectedMonth] = useState(
     () => getToday().slice(0, 7)
   );
 
-  const [expenses, setExpenses] = useState<Expense[]>([]);
+  const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [isLoaded, setIsLoaded] = useState(false);
 
   useEffect(() => {
   try {
-    const savedExpenses = localStorage.getItem("finwise-expenses");
+    const savedTransactions = localStorage.getItem(
+      "finwise-transactions"
+    );
 
-    if (savedExpenses !== null) {
-      const parsedExpenses = JSON.parse(savedExpenses);
+    if (savedTransactions !== null) {
+      const parsedTransactions = JSON.parse(savedTransactions);
 
-      if (Array.isArray(parsedExpenses)) {
-        setExpenses(parsedExpenses);
+      if (Array.isArray(parsedTransactions)) {
+        setTransactions(parsedTransactions);
       }
     }
   } catch (error) {
-    console.error("Harcamalar yüklenemedi:", error);
+    console.error("İşlemler yüklenemedi:", error);
   } finally {
     setIsLoaded(true);
   }
@@ -99,20 +112,25 @@ useEffect(() => {
   if (!isLoaded) {
     return;
   }
-
-  localStorage.setItem(
-    "finwise-expenses",
-    JSON.stringify(expenses)
+   localStorage.setItem(
+    "finwise-transactions",
+    JSON.stringify(transactions)
   );
-}, [expenses, isLoaded]);
+}, [transactions, isLoaded]);
+
+
+
+
 
   // Toplam gider ve bakiye hesaplama
-  const addedExpenses = expenses.reduce(
-    (total, item) => total + item.amount,
-    0
-  );
+  const income = transactions
+   .filter((item) => item.type === "income")
+   .reduce((sum, item) => sum + item.amount, 0);
 
-  const expense = initialExpense + addedExpenses;
+  const expense = transactions
+   .filter((item) => item.type === "expense")
+   .reduce((sum, item) => sum + item.amount, 0);
+
   const balance = income - expense;
   const selectedYear = Number(dateInput.slice(0, 4));
   const selectedMonthForDate = Number(dateInput.slice(5, 7));
@@ -125,8 +143,12 @@ useEffect(() => {
 
   // Kategorilere göre harcama hesaplama
   const categoryTotals = categories.map((category) => {
-    const total = expenses
-      .filter((item) => item.category === category)
+    const total = transactions
+      .filter(
+        (item) =>
+          item.type === "expense" &&
+          item.category === category
+      )
       .reduce((sum, item) => sum + item.amount, 0);
 
     return {
@@ -136,7 +158,9 @@ useEffect(() => {
   });
 
   // Seçilen aya ait harcamaları bulma
-  const monthlyExpenses = expenses.filter((item) =>
+  const monthlyExpenses = transactions.filter(
+  (item) =>
+    item.type === "expense" &&
     item.date.startsWith(selectedMonth)
   );
 
@@ -158,44 +182,47 @@ useEffect(() => {
 });
 
   // Yeni harcama ekleme
-  function handleAddExpense() {
-    const amount = Number(expenseInput);
+  function handleAddTransaction() {
+  const amount = Number(expenseInput);
 
-    if (
-      !expenseInput.trim() ||
-      !Number.isFinite(amount) ||
-      amount <= 0 ||
-      !descriptionInput.trim() ||
-      !dateInput ||
-      !/^\d{4}-\d{2}-\d{2}$/.test(dateInput) ||
-      !Number.isFinite(new Date(`${dateInput}T12:00:00`).getTime())
-    ) {
-      return;
-    }
-
-    const newExpense: Expense = {
-      id: crypto.randomUUID(),
-      description: descriptionInput.trim(),
-      amount: amount,
-      category: categoryInput,
-      date: dateInput,
-    };
-
-    setExpenses((previousExpenses) => [
-      newExpense,
-      ...previousExpenses,
-    ]);
-
-    setExpenseInput("");
-    setDescriptionInput("");
+  if (
+    !expenseInput.trim() ||
+    !Number.isFinite(amount) ||
+    amount <= 0 ||
+    !descriptionInput.trim() ||
+    !dateInput ||
+    !/^\d{4}-\d{2}-\d{2}$/.test(dateInput) ||
+    !Number.isFinite(new Date(`${dateInput}T12:00:00`).getTime())
+  ) {
+    return;
   }
+
+  const newTransaction: Transaction = {
+    id: crypto.randomUUID(),
+    description: descriptionInput.trim(),
+    amount: amount,
+    category: categoryInput,
+    date: dateInput,
+    type: transactionType,
+  };
+
+  setTransactions((previousTransactions) => [
+    newTransaction,
+    ...previousTransactions,
+  ]);
+
+  
+
+  setExpenseInput("");
+  setDescriptionInput("");
+}
 
   // Harcama silme
-  function handleDeleteExpense(id: string) {
-    setExpenses((previousExpenses) =>
-      previousExpenses.filter((item) => item.id !== id)
-    );
-  }
+  function handleDeleteTransaction(id: string) {
+  setTransactions((previousTransactions) =>
+    previousTransactions.filter((item) => item.id !== id)
+  );
+}
 
   return (
     <main className="flex min-h-screen flex-col items-center bg-slate-50 px-4 py-12">
@@ -252,7 +279,8 @@ useEffect(() => {
           onChange={(e) => setCategoryInput(e.target.value)}
           className="rounded-lg border border-gray-300 bg-white p-3 text-gray-900"
         >
-          {categories.map((category) => (
+          {(transactionType === "income" ? incomeCategories : categories).map(
+            (category) => (
             <option key={category} value={category}>
               {category}
             </option>
@@ -333,12 +361,37 @@ useEffect(() => {
   </select>
 </div>
 
+<div className="mb-4">
+  <label className="mb-2 block font-medium">
+    İşlem Türü
+  </label>
+
+  <select
+    value={transactionType}
+    onChange={(e) => {
+      const selectedType = e.target.value as "income" | "expense";
+
+      setTransactionType(selectedType);
+
+      if (selectedType === "income") {
+        setCategoryInput("Maaş");
+      } else {
+        setCategoryInput("Diğer");
+      }
+    }}
+    className="w-full rounded-lg border border-gray-300 p-3"
+  >
+    <option value="expense">Gider</option>
+    <option value="income">Gelir</option>
+  </select>
+</div>
+
         <button
           type="button"
-          onClick={handleAddExpense}
+          onClick={handleAddTransaction}
           className="rounded-lg bg-green-700 px-5 py-3 text-white hover:bg-green-800"
         >
-          Gider Ekle
+          {transactionType === "income" ? "Gelir Ekle" : "Gider Ekle"}
         </button>
       </div>
 
@@ -452,18 +505,18 @@ useEffect(() => {
         ))}
       </div>
 
-      {/* Son harcamalar */}
+      {/* Son işlemler */}
       <div className="mt-8 w-full max-w-md">
         <h2 className="mb-4 text-xl font-bold text-gray-900">
-          Son Harcamalar
+          Son İşlemler
         </h2>
 
-        {expenses.length === 0 ? (
+        {transactions.length === 0 ? (
           <p className="text-gray-500">
-            Henüz harcama eklenmedi.
+            Henüz işlem eklenmedi.
           </p>
         ) : (
-          expenses.map((item) => (
+          transactions.map((item) => (
             <div
               key={item.id}
               className="mb-2 flex items-center justify-between gap-4 rounded-lg bg-white p-4 shadow-sm"
@@ -485,13 +538,18 @@ useEffect(() => {
               </div>
 
               <div className="flex items-center gap-3">
-                <span className="font-semibold text-red-600">
-                  -{item.amount.toLocaleString("tr-TR")} TL
+                <span
+                  className={`font-semibold ${
+                    item.type === "income" ? "text-green-700" : "text-red-600"
+                  }`}
+                >
+                  {item.type === "income" ? "+" : "-"}
+                  {item.amount.toLocaleString("tr-TR")} TL
                 </span>
 
                 <button
                   type="button"
-                  onClick={() => handleDeleteExpense(item.id)}
+                  onClick={() => handleDeleteTransaction(item.id)}
                   className="rounded-lg border border-red-200 px-3 py-1 text-sm text-red-600 hover:bg-red-50"
                 >
                   Sil
