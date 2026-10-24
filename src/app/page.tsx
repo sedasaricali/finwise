@@ -86,6 +86,11 @@ export default function Home() {
   );
 
   const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [editingTransactionId, setEditingTransactionId] =
+    useState<string | null>(null);
+  const [editDescription, setEditDescription] = useState("");
+  const [editAmount, setEditAmount] = useState("");
+  const [editCategory, setEditCategory] = useState("");
   const [isLoaded, setIsLoaded] = useState(false);
 
   useEffect(() => {
@@ -118,7 +123,9 @@ useEffect(() => {
   );
 }, [transactions, isLoaded]);
 
-
+const editingTransaction = transactions.find(
+  (item) => item.id === editingTransactionId
+);
 
 
 
@@ -164,14 +171,40 @@ useEffect(() => {
     item.date.startsWith(selectedMonth)
   );
 
+  const monthlyIncomes = transactions.filter(
+  (item) =>
+    item.type === "income" &&
+    item.date.startsWith(selectedMonth)
+);
+
+const monthlyIncomeTotal = monthlyIncomes.reduce(
+  (total, item) => total + item.amount,
+  0
+);
+
+
+
   // Seçilen ayın toplam harcamasını hesaplama
   const monthlyTotal = monthlyExpenses.reduce(
     (total, item) => total + item.amount,
     0
   );
 
+  const monthlyBalance = monthlyIncomeTotal - monthlyTotal;
+
   const monthlyCategoryTotals = categories.map((category) => {
   const total = monthlyExpenses
+    .filter((item) => item.category === category)
+    .reduce((sum, item) => sum + item.amount, 0);
+
+  return {
+    category: category,
+    total: total,
+  };
+});
+
+const monthlyIncomeCategoryTotals = incomeCategories.map((category) => {
+  const total = monthlyIncomes
     .filter((item) => item.category === category)
     .reduce((sum, item) => sum + item.amount, 0);
 
@@ -223,6 +256,38 @@ useEffect(() => {
     previousTransactions.filter((item) => item.id !== id)
   );
 }
+const handleSaveEdit = () => {
+  if (editingTransactionId === null) {
+    return;
+  }
+
+  const amount = Number(editAmount);
+
+if (
+  editDescription.trim() === "" ||
+  editAmount.trim() === "" ||
+  !Number.isFinite(amount) ||
+  amount <= 0
+) {
+  alert("Lütfen geçerli bir açıklama ve sıfırdan büyük bir tutar gir.");
+  return;
+}
+
+  setTransactions((prev) =>
+    prev.map((item) =>
+      item.id === editingTransactionId
+        ? {
+            ...item,
+            description: editDescription,
+            amount: amount,
+            category: editCategory,
+          }
+        : item
+    )
+  );
+  setEditingTransactionId(null);
+};
+
 
   return (
     <main className="flex min-h-screen flex-col items-center bg-slate-50 px-4 py-12">
@@ -262,7 +327,11 @@ useEffect(() => {
           type="number"
           value={expenseInput}
           onChange={(e) => setExpenseInput(e.target.value)}
-          placeholder="Gider tutarını gir"
+          placeholder={
+            transactionType === "income"
+              ? "Gelir tutarını gir"
+              : "Gider tutarını gir"
+}
           className="rounded-lg border border-gray-300 bg-white p-3 text-gray-900"
         />
 
@@ -270,7 +339,11 @@ useEffect(() => {
           type="text"
           value={descriptionInput}
           onChange={(e) => setDescriptionInput(e.target.value)}
-          placeholder="Harcama açıklaması"
+          placeholder={
+            transactionType === "income"
+              ? "Gelir açıklaması"
+              : "Harcama açıklaması"
+}
           className="rounded-lg border border-gray-300 bg-white p-3 text-gray-900"
         />
 
@@ -453,20 +526,50 @@ useEffect(() => {
   </div>
 </div>
 
-        <p className="mt-4 text-sm text-gray-500">
-          Seçilen Ayın Harcamaları
-        </p>
+        <div className="mt-4 grid grid-cols-3 gap-2">
+  <div className="rounded-lg bg-green-50 p-3">
+    <p className="text-xs text-gray-600">Aylık Gelir</p>
+    <p className="mt-2 font-bold text-green-700">
+      {monthlyIncomeTotal.toLocaleString("tr-TR")} TL
+    </p>
+  </div>
 
-        <p className="mt-2 text-2xl font-bold text-green-700">
-          {monthlyTotal.toLocaleString("tr-TR")} TL
-        </p>
+  <div className="rounded-lg bg-red-50 p-3">
+    <p className="text-xs text-gray-600">Aylık Gider</p>
+    <p className="mt-2 font-bold text-red-600">
+      {monthlyTotal.toLocaleString("tr-TR")} TL
+    </p>
+  </div>
+
+  <div className="rounded-lg bg-slate-100 p-3">
+    <p className="text-xs text-gray-600">Aylık Fark</p>
+    <p
+  className={`mt-2 font-bold ${
+    monthlyBalance > 0
+      ? "text-green-700"
+      : monthlyBalance < 0
+      ? "text-red-600"
+      : "text-gray-900"
+  }`}
+>
+  {monthlyBalance.toLocaleString("tr-TR")} TL
+</p>
+  </div>
+</div>
 
         <div className="mt-5 border-t border-gray-200 pt-4">
   <h3 className="mb-3 font-semibold text-gray-900">
     Bu Ay Kategorilere Göre Harcamalar
   </h3>
+  {monthlyTotal === 0 && (
+  <p className="py-3 text-sm text-gray-500">
+    Bu ay için gider kaydı bulunmuyor.
+  </p>
+)}
 
-  {monthlyCategoryTotals.map((item) => (
+  {monthlyCategoryTotals
+    .filter((item) => item.total > 0)
+    .map((item) => (
     <div
       key={item.category}
       className="flex justify-between py-2"
@@ -481,6 +584,35 @@ useEffect(() => {
     </div>
   ))}
 </div> 
+
+<div className="mt-5 border-t border-gray-200 pt-4">
+  <h3 className="mb-3 font-semibold text-gray-900">
+    Bu Ay Kategorilere Göre Gelirler
+  </h3>
+
+  {monthlyIncomeTotal === 0 && (
+  <p className="py-3 text-sm text-gray-500">
+    Bu ay için gelir kaydı bulunmuyor.
+  </p>
+)}
+
+  {monthlyIncomeCategoryTotals
+  .filter((item) => item.total > 0)
+  .map((item) => (
+    <div
+      key={item.category}
+      className="flex justify-between py-2"
+    >
+      <span className="text-gray-600">
+        {item.category}
+      </span>
+
+      <span className="font-medium text-green-700">
+        {item.total.toLocaleString("tr-TR")} TL
+      </span>
+    </div>
+  ))}
+</div>
     </div>
 
       {/* Kategori harcamaları */}
@@ -510,6 +642,61 @@ useEffect(() => {
         <h2 className="mb-4 text-xl font-bold text-gray-900">
           Son İşlemler
         </h2>
+
+        {editingTransaction && (
+  <div className="mt-3 rounded-lg bg-blue-50 p-4">
+    <h3 className="mb-3 font-semibold text-blue-900">
+      İşlemi Düzenle
+    </h3>
+
+    <input
+      type="text"
+      value={editDescription}
+      onChange={(e) => setEditDescription(e.target.value)}
+      placeholder="İşlem açıklaması"
+      className="mb-3 w-full rounded-lg border border-gray-300 p-2 text-gray-900"
+    />
+
+    <input
+      type="number"
+      value={editAmount}
+      onChange={(e) => setEditAmount(e.target.value)}
+      placeholder="İşlem tutarı"
+      className="w-full rounded-lg border border-gray-300 p-2 text-gray-900"
+    />
+
+    <select
+      value={editCategory}
+      onChange={(e) => setEditCategory(e.target.value)}
+      className="mt-3 w-full rounded-lg border border-gray-300 p-2 text-gray-900"
+    >
+      {(editingTransaction.type === "income"
+        ? incomeCategories
+        : categories
+      ).map((category) => (
+        <option key={category} value={category}>
+          {category}
+        </option>
+      ))}
+    </select>
+
+    <button
+      type="button"
+      onClick={handleSaveEdit}
+      className="mr-2 mt-3 rounded-lg bg-green-700 px-4 py-2 text-white"
+    >
+      Kaydet
+    </button>
+
+    <button
+      type="button"
+      onClick={() => setEditingTransactionId(null)}
+      className="mt-3 rounded-lg bg-gray-200 px-4 py-2 text-gray-800"
+    >
+      İptal
+    </button>
+  </div>
+)}
 
         {transactions.length === 0 ? (
           <p className="text-gray-500">
@@ -546,6 +733,18 @@ useEffect(() => {
                   {item.type === "income" ? "+" : "-"}
                   {item.amount.toLocaleString("tr-TR")} TL
                 </span>
+
+                <button
+                  onClick={() => {
+                    setEditingTransactionId(item.id);
+                    setEditDescription(item.description);
+                    setEditAmount(String(item.amount));
+                    setEditCategory(item.category);
+                  }}
+                  className="rounded-lg bg-blue-100 px-3 py-2 text-sm text-blue-700"
+                >
+                  Düzenle
+                </button>
 
                 <button
                   type="button"
